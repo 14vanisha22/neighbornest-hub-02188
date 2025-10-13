@@ -1,13 +1,30 @@
 import { useState } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import * as z from "zod";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2 } from "lucide-react";
+
+const formSchema = z.object({
+  organization_name: z.string().trim().min(2, "Organization name must be at least 2 characters").max(100, "Name must be less than 100 characters"),
+  organization_type: z.enum(['ngo', 'shelter', 'family', 'community-center', 'school', 'other']),
+  food_type_needed: z.string().trim().min(3, "Food type must be at least 3 characters").max(200, "Food type must be less than 200 characters"),
+  quantity_needed: z.string().trim().min(1, "Quantity is required").max(50, "Quantity must be less than 50 characters"),
+  urgency: z.enum(['low', 'medium', 'high']),
+  pickup_location: z.string().trim().min(10, "Location must be at least 10 characters").max(500, "Location must be less than 500 characters"),
+  contact_phone: z.string().regex(/^[0-9+\-\s()]{10,20}$/, "Please enter a valid phone number"),
+  contact_email: z.string().email("Please enter a valid email").optional().or(z.literal('')),
+  notes: z.string().max(1000, "Notes must be less than 1000 characters").optional(),
+});
+
+type FormData = z.infer<typeof formSchema>;
 
 interface FoodRequestDialogProps {
   open: boolean;
@@ -17,20 +34,23 @@ interface FoodRequestDialogProps {
 export const FoodRequestDialog = ({ open, onOpenChange }: FoodRequestDialogProps) => {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
-  const [formData, setFormData] = useState({
-    organization_name: "",
-    organization_type: "",
-    food_type_needed: "",
-    quantity_needed: "",
-    pickup_location: "",
-    contact_phone: "",
-    contact_email: "",
-    urgency: "medium",
-    notes: "",
+
+  const form = useForm<FormData>({
+    resolver: zodResolver(formSchema),
+    defaultValues: {
+      organization_name: "",
+      organization_type: "ngo",
+      food_type_needed: "",
+      quantity_needed: "",
+      urgency: "medium",
+      pickup_location: "",
+      contact_phone: "",
+      contact_email: "",
+      notes: "",
+    },
   });
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const onSubmit = async (data: FormData) => {
     setLoading(true);
 
     const { data: { user } } = await supabase.auth.getUser();
@@ -47,7 +67,7 @@ export const FoodRequestDialog = ({ open, onOpenChange }: FoodRequestDialogProps
 
     const { error } = await supabase.from("food_requests").insert({
       requester_id: user.id,
-      ...formData,
+      ...data,
       status: "active",
     });
 
@@ -64,18 +84,8 @@ export const FoodRequestDialog = ({ open, onOpenChange }: FoodRequestDialogProps
         title: "Request submitted!",
         description: "Your food request has been posted. Donors will be notified.",
       });
+      form.reset();
       onOpenChange(false);
-      setFormData({
-        organization_name: "",
-        organization_type: "",
-        food_type_needed: "",
-        quantity_needed: "",
-        pickup_location: "",
-        contact_phone: "",
-        contact_email: "",
-        urgency: "medium",
-        notes: "",
-      });
     }
   };
 
@@ -89,119 +99,163 @@ export const FoodRequestDialog = ({ open, onOpenChange }: FoodRequestDialogProps
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <div className="grid md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="organization_name">Organization Name *</Label>
-              <Input
-                id="organization_name"
-                required
-                value={formData.organization_name}
-                onChange={(e) => setFormData({ ...formData, organization_name: e.target.value })}
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+            <div className="grid md:grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="organization_name"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Organization Name *</FormLabel>
+                    <FormControl>
+                      <Input {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="organization_type"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Organization Type *</FormLabel>
+                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select type" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="ngo">NGO</SelectItem>
+                        <SelectItem value="shelter">Shelter</SelectItem>
+                        <SelectItem value="family">Family in Need</SelectItem>
+                        <SelectItem value="community-center">Community Center</SelectItem>
+                        <SelectItem value="school">School</SelectItem>
+                        <SelectItem value="other">Other</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="food_type_needed"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Type of Food Needed *</FormLabel>
+                    <FormControl>
+                      <Input {...field} placeholder="e.g., Cooked meals, Groceries, Fresh produce" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="quantity_needed"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Quantity Needed *</FormLabel>
+                    <FormControl>
+                      <Input {...field} placeholder="e.g., 100 meals, 20 kg rice" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="urgency"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Urgency Level *</FormLabel>
+                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="low">Low - Within a week</SelectItem>
+                        <SelectItem value="medium">Medium - Within 2-3 days</SelectItem>
+                        <SelectItem value="high">High - Urgent (Today)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="contact_phone"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Contact Phone *</FormLabel>
+                    <FormControl>
+                      <Input {...field} type="tel" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="contact_email"
+                render={({ field }) => (
+                  <FormItem className="md:col-span-2">
+                    <FormLabel>Contact Email</FormLabel>
+                    <FormControl>
+                      <Input {...field} type="email" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="pickup_location"
+                render={({ field }) => (
+                  <FormItem className="md:col-span-2">
+                    <FormLabel>Delivery/Pickup Location *</FormLabel>
+                    <FormControl>
+                      <Input {...field} placeholder="Full address where food can be delivered" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="notes"
+                render={({ field }) => (
+                  <FormItem className="md:col-span-2">
+                    <FormLabel>Additional Information</FormLabel>
+                    <FormControl>
+                      <Textarea {...field} placeholder="Number of people to feed, dietary restrictions, storage capacity, etc." />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
               />
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="organization_type">Organization Type *</Label>
-              <Select required value={formData.organization_type} onValueChange={(value) => setFormData({ ...formData, organization_type: value })}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select type" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="ngo">NGO</SelectItem>
-                  <SelectItem value="shelter">Shelter</SelectItem>
-                  <SelectItem value="family">Family in Need</SelectItem>
-                  <SelectItem value="community-center">Community Center</SelectItem>
-                  <SelectItem value="school">School</SelectItem>
-                  <SelectItem value="other">Other</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="food_type_needed">Type of Food Needed *</Label>
-              <Input
-                id="food_type_needed"
-                required
-                placeholder="e.g., Cooked meals, Groceries, Fresh produce"
-                value={formData.food_type_needed}
-                onChange={(e) => setFormData({ ...formData, food_type_needed: e.target.value })}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="quantity_needed">Quantity Needed *</Label>
-              <Input
-                id="quantity_needed"
-                required
-                placeholder="e.g., 100 meals, 20 kg rice"
-                value={formData.quantity_needed}
-                onChange={(e) => setFormData({ ...formData, quantity_needed: e.target.value })}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="urgency">Urgency Level *</Label>
-              <Select required value={formData.urgency} onValueChange={(value) => setFormData({ ...formData, urgency: value })}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="low">Low - Within a week</SelectItem>
-                  <SelectItem value="medium">Medium - Within 2-3 days</SelectItem>
-                  <SelectItem value="high">High - Urgent (Today)</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="contact_phone">Contact Phone *</Label>
-              <Input
-                id="contact_phone"
-                type="tel"
-                required
-                value={formData.contact_phone}
-                onChange={(e) => setFormData({ ...formData, contact_phone: e.target.value })}
-              />
-            </div>
-
-            <div className="space-y-2 md:col-span-2">
-              <Label htmlFor="contact_email">Contact Email</Label>
-              <Input
-                id="contact_email"
-                type="email"
-                value={formData.contact_email}
-                onChange={(e) => setFormData({ ...formData, contact_email: e.target.value })}
-              />
-            </div>
-
-            <div className="space-y-2 md:col-span-2">
-              <Label htmlFor="pickup_location">Delivery/Pickup Location *</Label>
-              <Input
-                id="pickup_location"
-                required
-                placeholder="Full address where food can be delivered"
-                value={formData.pickup_location}
-                onChange={(e) => setFormData({ ...formData, pickup_location: e.target.value })}
-              />
-            </div>
-
-            <div className="space-y-2 md:col-span-2">
-              <Label htmlFor="notes">Additional Information</Label>
-              <Textarea
-                id="notes"
-                placeholder="Number of people to feed, dietary restrictions, storage capacity, etc."
-                value={formData.notes}
-                onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-              />
-            </div>
-          </div>
-
-          <Button type="submit" className="w-full" disabled={loading}>
-            {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Submit Request
-          </Button>
-        </form>
+            <Button type="submit" className="w-full" disabled={loading}>
+              {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Submit Request
+            </Button>
+          </form>
+        </Form>
       </DialogContent>
     </Dialog>
   );
