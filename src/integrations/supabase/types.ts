@@ -1274,33 +1274,39 @@ export type Database = {
           avatar_url: string | null
           bio: string | null
           created_at: string | null
+          display_name: string | null
           full_name: string | null
           id: string
           location: string | null
           phone: string | null
           points: number | null
+          show_on_leaderboard: boolean | null
           updated_at: string | null
         }
         Insert: {
           avatar_url?: string | null
           bio?: string | null
           created_at?: string | null
+          display_name?: string | null
           full_name?: string | null
           id: string
           location?: string | null
           phone?: string | null
           points?: number | null
+          show_on_leaderboard?: boolean | null
           updated_at?: string | null
         }
         Update: {
           avatar_url?: string | null
           bio?: string | null
           created_at?: string | null
+          display_name?: string | null
           full_name?: string | null
           id?: string
           location?: string | null
           phone?: string | null
           points?: number | null
+          show_on_leaderboard?: boolean | null
           updated_at?: string | null
         }
         Relationships: []
@@ -1744,7 +1750,13 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      leaderboard_view: {
+        Row: {
+          display_name: string | null
+          points: number | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       has_role: {
