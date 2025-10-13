@@ -68,11 +68,19 @@ export const FoodDonationDialog = ({ open, onOpenChange }: FoodDonationDialogPro
       return;
     }
 
-    const { error } = await supabase.from("food_donations").insert({
+    const { error } = await supabase.from("food_donations").insert([{
       donor_id: user.id,
-      ...data,
+      donor_name: data.donor_name,
+      donor_type: data.donor_type,
+      food_type: data.food_type,
+      quantity: data.quantity,
+      expiry_time: data.expiry_time,
+      pickup_location: data.pickup_location,
+      contact_phone: data.contact_phone,
+      contact_email: data.contact_email || "",
+      notes: data.notes || "",
       status: "pending",
-    });
+    }]);
 
     setLoading(false);
 

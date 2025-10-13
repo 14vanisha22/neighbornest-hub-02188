@@ -65,11 +65,19 @@ export const FoodRequestDialog = ({ open, onOpenChange }: FoodRequestDialogProps
       return;
     }
 
-    const { error } = await supabase.from("food_requests").insert({
+    const { error } = await supabase.from("food_requests").insert([{
       requester_id: user.id,
-      ...data,
+      organization_name: data.organization_name,
+      organization_type: data.organization_type,
+      food_type_needed: data.food_type_needed,
+      quantity_needed: data.quantity_needed,
+      urgency: data.urgency,
+      pickup_location: data.pickup_location,
+      contact_phone: data.contact_phone,
+      contact_email: data.contact_email || "",
+      notes: data.notes || "",
       status: "active",
-    });
+    }]);
 
     setLoading(false);
 
