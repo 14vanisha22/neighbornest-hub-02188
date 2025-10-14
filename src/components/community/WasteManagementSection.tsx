@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { z } from "zod";
 import { 
   Recycle, 
   Calendar, 
@@ -19,6 +20,26 @@ import {
   Droplets,
   ShoppingBag
 } from "lucide-react";
+
+const pickupSchema = z.object({
+  address: z.string().trim().min(10, "Address must be at least 10 characters").max(500, "Address is too long"),
+  waste_type: z.enum(['wet', 'dry', 'hazardous', 'e-waste'], { required_error: "Please select a waste type" }),
+  preferred_date: z.string().refine((date) => new Date(date) > new Date(), "Preferred date must be in the future"),
+  notes: z.string().max(1000, "Notes are too long").optional()
+});
+
+const recyclableSchema = z.object({
+  item_name: z.string().trim().min(2, "Item name must be at least 2 characters").max(100, "Item name is too long"),
+  description: z.string().trim().min(10, "Description must be at least 10 characters").max(1000, "Description is too long"),
+  quantity: z.string().trim().min(1, "Quantity is required").max(50, "Quantity description is too long"),
+  price: z.string().regex(/^\d*$/, "Price must be a number").optional().or(z.literal('')),
+  contact_info: z.string().regex(/^[0-9+\-\s()]{10,20}$|^[^\s@]+@[^\s@]+\.[^\s@]+$/, "Please enter a valid phone number or email")
+});
+
+const reportSchema = z.object({
+  location: z.string().trim().min(10, "Location must be at least 10 characters").max(500, "Location is too long"),
+  description: z.string().trim().min(10, "Description must be at least 10 characters").max(1000, "Description is too long")
+});
 
 export const WasteManagementSection = () => {
   const { toast } = useToast();
@@ -44,6 +65,17 @@ export const WasteManagementSection = () => {
 
   const handlePickupSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    const validation = pickupSchema.safeParse(pickupForm);
+    if (!validation.success) {
+      toast({ 
+        title: "Validation Error", 
+        description: validation.error.errors[0].message,
+        variant: "destructive" 
+      });
+      return;
+    }
+    
     const { data: { user } } = await supabase.auth.getUser();
     
     if (!user) {
@@ -53,7 +85,10 @@ export const WasteManagementSection = () => {
 
     const { error } = await supabase.from("pickups").insert({
       user_id: user.id,
-      ...pickupForm
+      address: validation.data.address,
+      waste_type: validation.data.waste_type,
+      preferred_date: validation.data.preferred_date,
+      notes: validation.data.notes || ""
     });
 
     if (error) {
@@ -66,6 +101,17 @@ export const WasteManagementSection = () => {
 
   const handleRecyclableSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    const validation = recyclableSchema.safeParse(recyclableForm);
+    if (!validation.success) {
+      toast({ 
+        title: "Validation Error", 
+        description: validation.error.errors[0].message,
+        variant: "destructive" 
+      });
+      return;
+    }
+    
     const { data: { user } } = await supabase.auth.getUser();
     
     if (!user) {
@@ -75,8 +121,11 @@ export const WasteManagementSection = () => {
 
     const { error } = await supabase.from("recyclables").insert({
       user_id: user.id,
-      ...recyclableForm,
-      price: recyclableForm.price ? parseInt(recyclableForm.price) : null
+      item_name: validation.data.item_name,
+      description: validation.data.description,
+      quantity: validation.data.quantity,
+      price: validation.data.price ? parseInt(validation.data.price) : null,
+      contact_info: validation.data.contact_info
     });
 
     if (error) {
@@ -89,6 +138,17 @@ export const WasteManagementSection = () => {
 
   const handleReportSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    const validation = reportSchema.safeParse(reportForm);
+    if (!validation.success) {
+      toast({ 
+        title: "Validation Error", 
+        description: validation.error.errors[0].message,
+        variant: "destructive" 
+      });
+      return;
+    }
+    
     const { data: { user } } = await supabase.auth.getUser();
     
     if (!user) {
@@ -98,7 +158,8 @@ export const WasteManagementSection = () => {
 
     const { error } = await supabase.from("dumping_reports").insert({
       user_id: user.id,
-      ...reportForm
+      location: validation.data.location,
+      description: validation.data.description
     });
 
     if (error) {
