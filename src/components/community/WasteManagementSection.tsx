@@ -21,8 +21,12 @@ import {
   ShoppingBag
 } from "lucide-react";
 
+// --- SECURITY FIX: STRENGTHENING INPUT VALIDATION ---
+
+const commonString = z.string().trim().min(1).max(500);
+
 const pickupSchema = z.object({
-  address: z.string().trim().min(10, "Address must be at least 10 characters").max(500, "Address is too long"),
+  address: commonString.min(10, "Address must be at least 10 characters").max(500, "Address is too long"),
   waste_type: z.enum(['wet', 'dry', 'hazardous', 'e-waste'], { required_error: "Please select a waste type" }),
   preferred_date: z.string().refine((date) => new Date(date) > new Date(), "Preferred date must be in the future"),
   notes: z.string().max(1000, "Notes are too long").optional()
@@ -37,8 +41,16 @@ const recyclableSchema = z.object({
 });
 
 const reportSchema = z.object({
-  location: z.string().trim().min(10, "Location must be at least 10 characters").max(500, "Location is too long"),
-  description: z.string().trim().min(10, "Description must be at least 10 characters").max(1000, "Description is too long")
+  // Explicitly allow standard address characters, preventing dangerous scripts/code.
+  location: z.string()
+    .trim()
+    .min(10, "Location must be at least 10 characters")
+    .max(500, "Location is too long")
+    .regex(/^[a-zA-Z0-9\s.,'#\-\/]+$/, "Location contains invalid characters."), // Security improvement
+  description: z.string()
+    .trim()
+    .min(10, "Description must be at least 10 characters")
+    .max(1000, "Description is too long")
 });
 
 export const WasteManagementSection = () => {
@@ -83,6 +95,8 @@ export const WasteManagementSection = () => {
       return;
     }
 
+    // Supabase is generally secure against SQL injection due to prepared statements,
+    // but client-side validation prevents malformed data entry.
     const { error } = await supabase.from("pickups").insert({
       user_id: user.id,
       address: validation.data.address,
@@ -156,6 +170,7 @@ export const WasteManagementSection = () => {
       return;
     }
 
+    // Use the validated and trimmed data from Zod
     const { error } = await supabase.from("dumping_reports").insert({
       user_id: user.id,
       location: validation.data.location,
