@@ -28,7 +28,8 @@ export const SocialGoodSection = () => {
   const fetchLeaderboard = async () => {
     const { data } = await supabase
       .from("profiles")
-      .select("full_name, points")
+      .select("display_name, points")
+      .eq("show_on_leaderboard", true)
       .order("points", { ascending: false })
       .limit(10);
     if (data) setLeaderboard(data);
@@ -126,7 +127,7 @@ export const SocialGoodSection = () => {
                           <span className="font-bold text-sm">{index + 1}</span>
                         </div>
                         <div>
-                          <p className="font-semibold">{user.full_name || "Anonymous"}</p>
+                          <p className="font-semibold">{user.display_name || "Anonymous"}</p>
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
