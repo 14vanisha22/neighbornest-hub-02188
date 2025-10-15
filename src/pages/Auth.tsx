@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2 } from "lucide-react";
+import { Loader2, Eye, EyeOff } from "lucide-react";
 import { z } from "zod";
 
 const passwordSchema = z.string()
@@ -22,6 +22,7 @@ const Auth = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -119,15 +120,26 @@ const Auth = () => {
             </div>
             <div className="space-y-2">
               <Label htmlFor="password">Password {!isLogin && <span className="text-xs text-muted-foreground">(min 12 chars, uppercase, lowercase, number, special char)</span>}</Label>
-              <Input
-                id="password"
-                type="password"
-                placeholder="Enter your password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                minLength={12}
-              />
+              <div className="relative">
+                <Input
+                  id="password"
+                  type={showPassword ? "text" : "password"}
+                  placeholder="Enter your password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  minLength={12}
+                  className="pr-10"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                >
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
             </div>
             <Button type="submit" className="w-full" disabled={loading}>
               {loading ? (
@@ -142,11 +154,45 @@ const Auth = () => {
               )}
             </Button>
           </form>
-          <div className="mt-4 text-center text-sm">
+          <div className="mt-4 space-y-2 text-center text-sm">
+            {isLogin && (
+              <button
+                type="button"
+                onClick={async () => {
+                  if (!email) {
+                    toast({
+                      title: "Email required",
+                      description: "Please enter your email to reset password",
+                      variant: "destructive"
+                    });
+                    return;
+                  }
+                  try {
+                    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+                      redirectTo: `${window.location.origin}/auth`
+                    });
+                    if (error) throw error;
+                    toast({
+                      title: "Password reset email sent!",
+                      description: "Check your inbox for the reset link"
+                    });
+                  } catch (error: any) {
+                    toast({
+                      title: "Error",
+                      description: error.message,
+                      variant: "destructive"
+                    });
+                  }
+                }}
+                className="text-primary hover:underline block w-full"
+              >
+                Forgot Password?
+              </button>
+            )}
             <button
               type="button"
               onClick={() => setIsLogin(!isLogin)}
-              className="text-primary hover:underline"
+              className="text-primary hover:underline block w-full"
             >
               {isLogin
                 ? "Don't have an account? Sign up"

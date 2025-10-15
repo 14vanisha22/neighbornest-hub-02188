@@ -47,6 +47,7 @@ interface JobDetailsDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   job: Job | null;
+  onApply?: () => void;
 }
 
 const getCategoryIcon = (category: string) => {
@@ -73,7 +74,7 @@ const getUrgencyColor = (urgency: string) => {
   }
 };
 
-export const JobDetailsDialog = ({ open, onOpenChange, job }: JobDetailsDialogProps) => {
+export const JobDetailsDialog = ({ open, onOpenChange, job, onApply }: JobDetailsDialogProps) => {
   if (!job) return null;
 
   return (
@@ -262,11 +263,8 @@ export const JobDetailsDialog = ({ open, onOpenChange, job }: JobDetailsDialogPr
 
           {/* Action Buttons */}
           <div className="flex gap-3 pt-4">
-            <Button className="flex-1" size="lg">
+            <Button className="flex-1" size="lg" onClick={onApply}>
               Apply Now
-            </Button>
-            <Button variant="outline" size="lg">
-              Save Job
             </Button>
           </div>
         </div>

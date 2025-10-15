@@ -786,6 +786,51 @@ export type Database = {
           },
         ]
       }
+      job_applications: {
+        Row: {
+          cover_letter: string | null
+          created_at: string | null
+          email: string
+          full_name: string
+          id: string
+          job_id: string
+          linkedin_url: string | null
+          phone: string
+          resume_url: string | null
+          status: string | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          cover_letter?: string | null
+          created_at?: string | null
+          email: string
+          full_name: string
+          id?: string
+          job_id: string
+          linkedin_url?: string | null
+          phone: string
+          resume_url?: string | null
+          status?: string | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          cover_letter?: string | null
+          created_at?: string | null
+          email?: string
+          full_name?: string
+          id?: string
+          job_id?: string
+          linkedin_url?: string | null
+          phone?: string
+          resume_url?: string | null
+          status?: string | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       jobs: {
         Row: {
           company: string
@@ -1346,6 +1391,27 @@ export type Database = {
           price?: number | null
           quantity?: string
           status?: Database["public"]["Enums"]["item_status"] | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      saved_jobs: {
+        Row: {
+          created_at: string | null
+          id: string
+          job_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          job_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          job_id?: string
           user_id?: string
         }
         Relationships: []

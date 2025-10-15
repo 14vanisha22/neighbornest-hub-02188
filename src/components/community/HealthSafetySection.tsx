@@ -207,7 +207,7 @@ export const HealthSafetySection = () => {
           </TabsContent>
 
           <TabsContent value="medicines">
-            <div className="mb-6">
+            <div className="mb-6 space-y-6">
               <div className="flex gap-2">
                 <Input
                   placeholder="Search for medicine..."
@@ -217,6 +217,40 @@ export const HealthSafetySection = () => {
                 />
                 <Button>Search</Button>
               </div>
+
+              {/* Pharmacy Contacts Section */}
+              <Card className="bg-accent/5">
+                <CardHeader>
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <Pill className="w-5 h-5" />
+                    💊 Nearby Pharmacies – Call for Help
+                  </CardTitle>
+                  <CardDescription>
+                    Quick contact information for local pharmacies
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid md:grid-cols-2 gap-4">
+                    {medicines?.slice(0, 4).map((pharmacy) => (
+                      <div key={pharmacy.id} className="flex items-center justify-between p-3 bg-background rounded-lg border">
+                        <div>
+                          <p className="font-semibold">{pharmacy.pharmacy_name}</p>
+                          <p className="text-sm text-muted-foreground flex items-center gap-1">
+                            <MapPin className="w-3 h-3" />
+                            {pharmacy.address.split(',')[0]}
+                          </p>
+                        </div>
+                        <a href={`tel:${pharmacy.contact}`}>
+                          <Button size="sm" variant="outline">
+                            <Phone className="w-4 h-4 mr-2" />
+                            Call Now
+                          </Button>
+                        </a>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
             </div>
 
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">

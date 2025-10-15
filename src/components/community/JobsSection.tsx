@@ -1,10 +1,13 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { JobDetailsDialog } from "./JobDetailsDialog";
+import { JobApplicationDialog } from "./JobApplicationDialog";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
 import { 
   Search, 
   MapPin, 
@@ -14,7 +17,9 @@ import {
   Wrench,
   GraduationCap,
   Heart,
-  Plus
+  Plus,
+  Bookmark,
+  BookmarkCheck
 } from "lucide-react";
 
 // Mock data for jobs and services
@@ -171,11 +176,84 @@ const getUrgencyColor = (urgency: string) => {
 };
 
 export const JobsSection = () => {
+  const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [locationFilter, setLocationFilter] = useState("all");
   const [selectedJob, setSelectedJob] = useState<typeof jobsData[0] | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isApplicationDialogOpen, setIsApplicationDialogOpen] = useState(false);
+  const [savedJobs, setSavedJobs] = useState<Set<number>>(new Set());
+
+  // Fetch saved jobs
+  useEffect(() => {
+    const fetchSavedJobs = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data } = await supabase
+        .from('saved_jobs')
+        .select('job_id')
+        .eq('user_id', user.id);
+
+      if (data) {
+        setSavedJobs(new Set(data.map(item => Number(item.job_id))));
+      }
+    };
+
+    fetchSavedJobs();
+  }, []);
+
+  const handleSaveJob = async (jobId: number) => {
+    const { data: { user } } = await supabase.auth.getUser();
+    
+    if (!user) {
+      toast({
+        title: "Authentication required",
+        description: "Please login to save jobs",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    const isSaved = savedJobs.has(jobId);
+
+    try {
+      if (isSaved) {
+        // Unsave job
+        await supabase
+          .from('saved_jobs')
+          .delete()
+          .eq('user_id', user.id)
+          .eq('job_id', String(jobId));
+        
+        setSavedJobs(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(jobId);
+          return newSet;
+        });
+
+        toast({ title: "Job removed from saved jobs" });
+      } else {
+        // Save job
+        await supabase
+          .from('saved_jobs')
+          .insert({
+            user_id: user.id,
+            job_id: String(jobId)
+          });
+
+        setSavedJobs(prev => new Set(prev).add(jobId));
+        toast({ title: "Job saved successfully!" });
+      }
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive"
+      });
+    }
+  };
 
   const filteredJobs = jobsData.filter(job => {
     const matchesSearch = job.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -283,16 +361,30 @@ export const JobsSection = () => {
                       <DollarSign className="w-4 h-4" />
                       <span>{job.salary}</span>
                     </div>
-                    <Button 
-                      variant="outline" 
-                      size="sm"
-                      onClick={() => {
-                        setSelectedJob(job);
-                        setIsDialogOpen(true);
-                      }}
-                    >
-                      View Details
-                    </Button>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleSaveJob(job.id)}
+                        className="px-2"
+                      >
+                        {savedJobs.has(job.id) ? (
+                          <BookmarkCheck className="w-4 h-4 text-primary" />
+                        ) : (
+                          <Bookmark className="w-4 h-4" />
+                        )}
+                      </Button>
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => {
+                          setSelectedJob(job);
+                          setIsDialogOpen(true);
+                        }}
+                      >
+                        View Details
+                      </Button>
+                    </div>
                   </div>
 
                   <div className="flex flex-wrap gap-2">
@@ -321,7 +413,20 @@ export const JobsSection = () => {
         open={isDialogOpen}
         onOpenChange={setIsDialogOpen}
         job={selectedJob}
+        onApply={() => {
+          setIsDialogOpen(false);
+          setIsApplicationDialogOpen(true);
+        }}
       />
+
+      {selectedJob && (
+        <JobApplicationDialog
+          open={isApplicationDialogOpen}
+          onOpenChange={setIsApplicationDialogOpen}
+          jobId={selectedJob.id}
+          jobTitle={selectedJob.title}
+        />
+      )}
     </section>
   );
 };
