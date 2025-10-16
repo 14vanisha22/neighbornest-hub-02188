@@ -3,15 +3,27 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Calendar, MapPin, Users, Plus } from "lucide-react";
+import { Calendar, MapPin, Users, Plus, Heart, Star, UserPlus } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { useToast } from "@/hooks/use-toast";
+
+interface EventRSVP {
+  event_id: string;
+  rsvp_type: 'going' | 'interested';
+}
 
 export const EventsSection = () => {
   const [events, setEvents] = useState<any[]>([]);
+  const [userRSVPs, setUserRSVPs] = useState<Set<string>>(new Set());
+  const [userRSVPTypes, setUserRSVPTypes] = useState<Map<string, 'going' | 'interested'>>(new Map());
+  const [userVolunteers, setUserVolunteers] = useState<Set<string>>(new Set());
   const navigate = useNavigate();
+  const { toast } = useToast();
 
   useEffect(() => {
     fetchEvents();
+    fetchUserRSVPs();
+    fetchUserVolunteers();
   }, []);
 
   const fetchEvents = async () => {
@@ -24,6 +36,140 @@ export const EventsSection = () => {
 
     if (!error && data) {
       setEvents(data);
+    }
+  };
+
+  const fetchUserRSVPs = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const { data, error } = await supabase
+      .from("event_rsvps")
+      .select("event_id, rsvp_type")
+      .eq("user_id", user.id);
+
+    if (!error && data) {
+      setUserRSVPs(new Set(data.map((r: EventRSVP) => r.event_id)));
+      setUserRSVPTypes(new Map(data.map((r: EventRSVP) => [r.event_id, r.rsvp_type])));
+    }
+  };
+
+  const fetchUserVolunteers = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const { data, error } = await supabase
+      .from("event_volunteers")
+      .select("event_id")
+      .eq("user_id", user.id);
+
+    if (!error && data) {
+      setUserVolunteers(new Set(data.map((v: any) => v.event_id)));
+    }
+  };
+
+  const handleRSVP = async (eventId: string, type: 'going' | 'interested') => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      navigate("/auth");
+      return;
+    }
+
+    const currentRSVP = userRSVPTypes.get(eventId);
+    
+    if (currentRSVP === type) {
+      // Remove RSVP if clicking same button again
+      const { error } = await supabase
+        .from("event_rsvps")
+        .delete()
+        .eq("event_id", eventId)
+        .eq("user_id", user.id);
+
+      if (!error) {
+        setUserRSVPs(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(eventId);
+          return newSet;
+        });
+        setUserRSVPTypes(prev => {
+          const newMap = new Map(prev);
+          newMap.delete(eventId);
+          return newMap;
+        });
+        toast({ title: "RSVP removed" });
+        fetchEvents();
+      }
+    } else {
+      // Add or update RSVP
+      const { error } = await supabase
+        .from("event_rsvps")
+        .upsert({
+          event_id: eventId,
+          user_id: user.id,
+          rsvp_type: type
+        }, {
+          onConflict: 'event_id,user_id'
+        });
+
+      if (!error) {
+        setUserRSVPs(prev => new Set([...prev, eventId]));
+        setUserRSVPTypes(prev => new Map([...prev, [eventId, type]]));
+        toast({ 
+          title: type === 'going' ? "Marked as Going!" : "Marked as Interested!",
+          description: "You can change this anytime"
+        });
+        fetchEvents();
+      }
+    }
+  };
+
+  const handleVolunteer = async (eventId: string) => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      navigate("/auth");
+      return;
+    }
+
+    if (userVolunteers.has(eventId)) {
+      // Remove volunteer
+      const { error } = await supabase
+        .from("event_volunteers")
+        .delete()
+        .eq("event_id", eventId)
+        .eq("user_id", user.id);
+
+      if (!error) {
+        setUserVolunteers(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(eventId);
+          return newSet;
+        });
+        toast({ title: "Volunteer registration removed" });
+        fetchEvents();
+      }
+    } else {
+      // Add volunteer
+      const { error } = await supabase
+        .from("event_volunteers")
+        .insert({
+          event_id: eventId,
+          user_id: user.id
+        });
+
+      if (!error) {
+        setUserVolunteers(prev => new Set([...prev, eventId]));
+        toast({ 
+          title: "Volunteer registered!",
+          description: "Thank you for volunteering!"
+        });
+        fetchEvents();
+      } else {
+        toast({
+          title: "Already registered",
+          description: "You're already volunteering for this event",
+          variant: "destructive"
+        });
+      }
     }
   };
 
@@ -92,8 +238,46 @@ export const EventsSection = () => {
                     <Users className="h-4 w-4 text-muted-foreground" />
                     <span>{event.rsvp_count} attending</span>
                   </div>
+                  {event.volunteer_spots && (
+                    <div className="flex items-center gap-2">
+                      <UserPlus className="h-4 w-4 text-muted-foreground" />
+                      <span>{event.volunteers_joined}/{event.volunteer_spots} volunteers</span>
+                    </div>
+                  )}
                 </div>
-                <Button className="w-full">RSVP to Event</Button>
+                
+                <div className="flex gap-2">
+                  <Button
+                    variant={userRSVPTypes.get(event.id) === 'going' ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => handleRSVP(event.id, 'going')}
+                    className="flex-1"
+                  >
+                    <Heart className={`h-4 w-4 mr-1 ${userRSVPTypes.get(event.id) === 'going' ? 'fill-current' : ''}`} />
+                    Going
+                  </Button>
+                  <Button
+                    variant={userRSVPTypes.get(event.id) === 'interested' ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => handleRSVP(event.id, 'interested')}
+                    className="flex-1"
+                  >
+                    <Star className={`h-4 w-4 mr-1 ${userRSVPTypes.get(event.id) === 'interested' ? 'fill-current' : ''}`} />
+                    Interested
+                  </Button>
+                </div>
+
+                {event.volunteer_spots && (
+                  <Button
+                    variant={userVolunteers.has(event.id) ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => handleVolunteer(event.id)}
+                    className="w-full"
+                  >
+                    <UserPlus className="h-4 w-4 mr-1" />
+                    {userVolunteers.has(event.id) ? "Volunteering ✓" : "Volunteer"}
+                  </Button>
+                )}
               </CardContent>
             </Card>
           ))}

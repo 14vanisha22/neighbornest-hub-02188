@@ -336,18 +336,21 @@ export type Database = {
           created_at: string | null
           event_id: string
           id: string
+          rsvp_type: string | null
           user_id: string
         }
         Insert: {
           created_at?: string | null
           event_id: string
           id?: string
+          rsvp_type?: string | null
           user_id: string
         }
         Update: {
           created_at?: string | null
           event_id?: string
           id?: string
+          rsvp_type?: string | null
           user_id?: string
         }
         Relationships: [
@@ -367,6 +370,38 @@ export type Database = {
           },
         ]
       }
+      event_volunteers: {
+        Row: {
+          created_at: string | null
+          event_id: string
+          id: string
+          user_id: string
+          volunteer_role: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          event_id: string
+          id?: string
+          user_id: string
+          volunteer_role?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          event_id?: string
+          id?: string
+          user_id?: string
+          volunteer_role?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_volunteers_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       events: {
         Row: {
           category: string
@@ -377,10 +412,13 @@ export type Database = {
           event_date: string
           id: string
           image_url: string | null
+          impact_data: Json | null
           location: string
           rsvp_count: number | null
           status: Database["public"]["Enums"]["event_status"] | null
           title: string
+          volunteer_spots: number | null
+          volunteers_joined: number | null
         }
         Insert: {
           category: string
@@ -391,10 +429,13 @@ export type Database = {
           event_date: string
           id?: string
           image_url?: string | null
+          impact_data?: Json | null
           location: string
           rsvp_count?: number | null
           status?: Database["public"]["Enums"]["event_status"] | null
           title: string
+          volunteer_spots?: number | null
+          volunteers_joined?: number | null
         }
         Update: {
           category?: string
@@ -405,10 +446,13 @@ export type Database = {
           event_date?: string
           id?: string
           image_url?: string | null
+          impact_data?: Json | null
           location?: string
           rsvp_count?: number | null
           status?: Database["public"]["Enums"]["event_status"] | null
           title?: string
+          volunteer_spots?: number | null
+          volunteers_joined?: number | null
         }
         Relationships: [
           {
