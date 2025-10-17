@@ -4,18 +4,41 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Heart, Users, TrendingUp, Award, MessageSquare, Target } from "lucide-react";
+import { Progress } from "@/components/ui/progress";
+import { Heart, Users, TrendingUp, Award, MessageSquare, Target, ThumbsUp } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { CreatePollDialog } from "./CreatePollDialog";
+import { ReportProblemDialog } from "./ReportProblemDialog";
 
 export const SocialGoodSection = () => {
   const [organizations, setOrganizations] = useState<any[]>([]);
   const [leaderboard, setLeaderboard] = useState<any[]>([]);
   const [polls, setPolls] = useState<any[]>([]);
+  const [problems, setProblems] = useState<any[]>([]);
+  const [userVotes, setUserVotes] = useState<Record<string, number>>({});
+  const [userUpvotes, setUserUpvotes] = useState<Set<string>>(new Set());
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const { toast } = useToast();
 
   useEffect(() => {
+    getCurrentUser();
     fetchOrganizations();
     fetchLeaderboard();
     fetchPolls();
+    fetchProblems();
   }, []);
+
+  useEffect(() => {
+    if (currentUserId) {
+      fetchUserVotes();
+      fetchUserUpvotes();
+    }
+  }, [currentUserId]);
+
+  const getCurrentUser = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    setCurrentUserId(user?.id || null);
+  };
 
   const fetchOrganizations = async () => {
     const { data } = await supabase
@@ -43,6 +66,145 @@ export const SocialGoodSection = () => {
       .order("created_at", { ascending: false })
       .limit(5);
     if (data) setPolls(data);
+  };
+
+  const fetchProblems = async () => {
+    const { data, error } = await supabase
+      .from("problem_reports")
+      .select("*")
+      .order("upvotes", { ascending: false })
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      console.error("Error fetching problems:", error);
+      return;
+    }
+
+    setProblems(data || []);
+  };
+
+  const fetchUserVotes = async () => {
+    if (!currentUserId) return;
+
+    const { data, error } = await supabase
+      .from("poll_votes")
+      .select("poll_id, option_index")
+      .eq("user_id", currentUserId);
+
+    if (error) {
+      console.error("Error fetching user votes:", error);
+      return;
+    }
+
+    const votesMap: Record<string, number> = {};
+    data?.forEach((vote) => {
+      votesMap[vote.poll_id] = vote.option_index;
+    });
+    setUserVotes(votesMap);
+  };
+
+  const fetchUserUpvotes = async () => {
+    if (!currentUserId) return;
+
+    const { data, error } = await supabase
+      .from("problem_upvotes")
+      .select("problem_id")
+      .eq("user_id", currentUserId);
+
+    if (error) {
+      console.error("Error fetching user upvotes:", error);
+      return;
+    }
+
+    const upvotesSet = new Set(data?.map((upvote) => upvote.problem_id) || []);
+    setUserUpvotes(upvotesSet);
+  };
+
+  const handleVote = async (pollId: string, optionIndex: number) => {
+    if (!currentUserId) {
+      toast({
+        title: "Authentication required",
+        description: "Please sign in to vote",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (userVotes[pollId] !== undefined) {
+      toast({
+        title: "Already voted",
+        description: "You have already voted on this poll",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const { error } = await supabase
+      .from("poll_votes")
+      .insert({
+        poll_id: pollId,
+        user_id: currentUserId,
+        option_index: optionIndex,
+      });
+
+    if (error) {
+      console.error("Error voting:", error);
+      toast({
+        title: "Error",
+        description: "Failed to submit vote",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    toast({
+      title: "Vote submitted",
+      description: "Thank you for participating!",
+    });
+
+    fetchPolls();
+    fetchUserVotes();
+  };
+
+  const handleUpvote = async (problemId: string) => {
+    if (!currentUserId) {
+      toast({
+        title: "Authentication required",
+        description: "Please sign in to upvote",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const hasUpvoted = userUpvotes.has(problemId);
+
+    if (hasUpvoted) {
+      const { error } = await supabase
+        .from("problem_upvotes")
+        .delete()
+        .eq("problem_id", problemId)
+        .eq("user_id", currentUserId);
+
+      if (error) {
+        console.error("Error removing upvote:", error);
+        return;
+      }
+    } else {
+      const { error } = await supabase
+        .from("problem_upvotes")
+        .insert({
+          problem_id: problemId,
+          user_id: currentUserId,
+        });
+
+      if (error) {
+        console.error("Error adding upvote:", error);
+        return;
+      }
+    }
+
+    fetchProblems();
+    fetchUserUpvotes();
   };
 
   const getOrgTypeIcon = (type: string) => {
@@ -142,31 +304,65 @@ export const SocialGoodSection = () => {
           </TabsContent>
 
           <TabsContent value="polls" className="space-y-6">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-semibold">Community Polls</h3>
+              <CreatePollDialog onPollCreated={fetchPolls} />
+            </div>
             <div className="grid gap-6">
-              {polls.map((poll) => (
-                <Card key={poll.id}>
-                  <CardHeader>
-                    <div className="flex items-center gap-2 mb-2">
-                      <MessageSquare className="h-5 w-5 text-primary" />
-                      <Badge>{poll.category}</Badge>
-                    </div>
-                    <CardTitle>{poll.title}</CardTitle>
-                    {poll.description && (
-                      <p className="text-muted-foreground">{poll.description}</p>
-                    )}
-                  </CardHeader>
-                  <CardContent className="space-y-3">
-                    {(JSON.parse(poll.options) || []).map((option: any, index: number) => (
-                      <Button key={index} variant="outline" className="w-full justify-start">
-                        {option.text || option}
-                      </Button>
-                    ))}
-                    <p className="text-sm text-muted-foreground text-center">
-                      {poll.total_votes} votes
-                    </p>
-                  </CardContent>
-                </Card>
-              ))}
+              {polls.length === 0 ? (
+                <p className="text-center text-muted-foreground py-8">No active polls</p>
+              ) : (
+                polls.map((poll) => {
+                  const totalVotes = poll.total_votes || 0;
+                  const hasVoted = userVotes[poll.id] !== undefined;
+                  
+                  return (
+                    <Card key={poll.id}>
+                      <CardContent className="p-6">
+                        <h3 className="font-semibold mb-2">{poll.title}</h3>
+                        {poll.description && (
+                          <p className="text-sm text-muted-foreground mb-4">{poll.description}</p>
+                        )}
+                        <div className="space-y-3">
+                          {poll.options.map((option: any, index: number) => {
+                            const percentage = totalVotes > 0 
+                              ? Math.round((option.votes / totalVotes) * 100) 
+                              : 0;
+                            const isUserChoice = userVotes[poll.id] === index;
+
+                            return (
+                              <div key={index} className="space-y-1">
+                                <div className="flex items-center justify-between">
+                                  <Button
+                                    variant={isUserChoice ? "default" : "outline"}
+                                    size="sm"
+                                    onClick={() => handleVote(poll.id, index)}
+                                    disabled={hasVoted}
+                                    className="flex-1 justify-start"
+                                  >
+                                    <span className="text-sm">{option.text}</span>
+                                  </Button>
+                                  <Badge variant="secondary" className="ml-2">
+                                    {percentage}%
+                                  </Badge>
+                                </div>
+                                {hasVoted && (
+                                  <Progress value={percentage} className="h-2" />
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                        {hasVoted && (
+                          <p className="text-xs text-muted-foreground mt-4">
+                            Total votes: {totalVotes}
+                          </p>
+                        )}
+                      </CardContent>
+                    </Card>
+                  );
+                })
+              )}
             </div>
           </TabsContent>
 
@@ -183,17 +379,58 @@ export const SocialGoodSection = () => {
             </Card>
           </TabsContent>
 
-          <TabsContent value="problems">
-            <Card>
-              <CardHeader>
-                <CardTitle>Problem Reports & Tracking</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-muted-foreground text-center py-8">
-                  Report local problems and track their resolution status.
-                </p>
-              </CardContent>
-            </Card>
+          <TabsContent value="problems" className="space-y-6">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-semibold">Community Problems</h3>
+              <ReportProblemDialog onProblemReported={fetchProblems} />
+            </div>
+            <div className="grid gap-6">
+              {problems.length === 0 ? (
+                <p className="text-center text-muted-foreground py-8">No problems reported yet</p>
+              ) : (
+                problems.map((problem) => {
+                  const hasUpvoted = userUpvotes.has(problem.id);
+
+                  return (
+                    <Card key={problem.id}>
+                      <CardContent className="p-6">
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-2">
+                              <Badge>{problem.category}</Badge>
+                              <Badge variant={problem.status === "reported" ? "destructive" : "secondary"}>
+                                {problem.status}
+                              </Badge>
+                            </div>
+                            <h3 className="font-semibold mb-2">{problem.title}</h3>
+                            <p className="text-sm text-muted-foreground mb-2">
+                              📍 {problem.location}
+                            </p>
+                            <p className="text-sm mb-4">{problem.description}</p>
+                            {problem.image_url && (
+                              <img
+                                src={problem.image_url}
+                                alt={problem.title}
+                                className="w-full max-w-md rounded-lg mb-4"
+                              />
+                            )}
+                          </div>
+                          <Button
+                            variant={hasUpvoted ? "default" : "outline"}
+                            size="sm"
+                            onClick={() => handleUpvote(problem.id)}
+                            className="flex-col h-auto py-2"
+                          >
+                            <ThumbsUp className={`h-4 w-4 ${hasUpvoted ? "fill-current" : ""}`} />
+                            <span className="text-xs mt-1">{problem.upvotes}</span>
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })
+              )}
+            </div>
           </TabsContent>
 
           <TabsContent value="projects">

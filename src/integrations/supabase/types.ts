@@ -331,6 +331,41 @@ export type Database = {
         }
         Relationships: []
       }
+      event_comments: {
+        Row: {
+          comment_text: string
+          created_at: string | null
+          event_id: string
+          id: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          comment_text: string
+          created_at?: string | null
+          event_id: string
+          id?: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          comment_text?: string
+          created_at?: string | null
+          event_id?: string
+          id?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_comments_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       event_rsvps: {
         Row: {
           created_at: string | null
@@ -1656,6 +1691,7 @@ export type Database = {
           description: string | null
           expires_at: string | null
           id: string
+          is_anonymous: boolean | null
           questions: Json
           status: Database["public"]["Enums"]["item_status"] | null
           title: string
@@ -1667,6 +1703,7 @@ export type Database = {
           description?: string | null
           expires_at?: string | null
           id?: string
+          is_anonymous?: boolean | null
           questions: Json
           status?: Database["public"]["Enums"]["item_status"] | null
           title: string
@@ -1678,6 +1715,7 @@ export type Database = {
           description?: string | null
           expires_at?: string | null
           id?: string
+          is_anonymous?: boolean | null
           questions?: Json
           status?: Database["public"]["Enums"]["item_status"] | null
           title?: string
