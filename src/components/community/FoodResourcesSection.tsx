@@ -3,11 +3,18 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
-import { Apple, Clock, MapPin, Phone, Users, Utensils, Heart, Sparkles, TrendingUp, Building2 } from "lucide-react";
+import { Apple, Clock, MapPin, Phone, Users, Utensils, Heart, Sparkles, TrendingUp, Building2, Search, Filter, Plus, Map as MapIcon } from "lucide-react";
 import { format } from "date-fns";
 import { FoodDonationDialog } from "./FoodDonationDialog";
 import { FoodRequestDialog } from "./FoodRequestDialog";
+import { KitchenMapView } from "./KitchenMapView";
+import { KitchenDetailsDialog } from "./KitchenDetailsDialog";
+import { AddKitchenDialog } from "./AddKitchenDialog";
 
 interface FoodDonation {
   id: string;
@@ -39,6 +46,7 @@ interface CommunityKitchen {
   id: string;
   name: string;
   location: string;
+  address: string;
   timings: string;
   meal_types: string[];
   food_type: string;
@@ -47,6 +55,9 @@ interface CommunityKitchen {
   price_range: string;
   rating: number;
   total_reviews: number;
+  latitude?: number;
+  longitude?: number;
+  status?: string;
 }
 
 interface FoodBank {
@@ -59,6 +70,8 @@ interface FoodBank {
   timings: string;
   services: string[];
   is_partner: boolean;
+  latitude?: number;
+  longitude?: number;
 }
 
 export const FoodResourcesSection = () => {
@@ -66,8 +79,20 @@ export const FoodResourcesSection = () => {
   const [requests, setRequests] = useState<FoodRequest[]>([]);
   const [kitchens, setKitchens] = useState<CommunityKitchen[]>([]);
   const [foodBanks, setFoodBanks] = useState<FoodBank[]>([]);
+  const [filteredKitchens, setFilteredKitchens] = useState<CommunityKitchen[]>([]);
   const [donationDialogOpen, setDonationDialogOpen] = useState(false);
   const [requestDialogOpen, setRequestDialogOpen] = useState(false);
+  const [kitchenDetailsOpen, setKitchenDetailsOpen] = useState(false);
+  const [selectedKitchen, setSelectedKitchen] = useState<CommunityKitchen | null>(null);
+  const [addKitchenOpen, setAddKitchenOpen] = useState(false);
+  const [showMap, setShowMap] = useState(false);
+  
+  // Filters
+  const [searchTerm, setSearchTerm] = useState("");
+  const [freeOnly, setFreeOnly] = useState(false);
+  const [openNow, setOpenNow] = useState(false);
+  const [mealTypeFilter, setMealTypeFilter] = useState("all");
+  const [distanceFilter, setDistanceFilter] = useState("all");
 
   useEffect(() => {
     fetchDonations();
@@ -75,6 +100,10 @@ export const FoodResourcesSection = () => {
     fetchKitchens();
     fetchFoodBanks();
   }, []);
+
+  useEffect(() => {
+    applyFilters();
+  }, [kitchens, searchTerm, freeOnly, openNow, mealTypeFilter, distanceFilter]);
 
   const fetchDonations = async () => {
     const { data } = await supabase
@@ -101,9 +130,11 @@ export const FoodResourcesSection = () => {
       .from("community_kitchens")
       .select("*")
       .eq("status", "active")
-      .order("rating", { ascending: false })
-      .limit(6);
-    if (data) setKitchens(data);
+      .order("rating", { ascending: false });
+    if (data) {
+      setKitchens(data);
+      setFilteredKitchens(data);
+    }
   };
 
   const fetchFoodBanks = async () => {
@@ -114,6 +145,56 @@ export const FoodResourcesSection = () => {
       .order("created_at", { ascending: false })
       .limit(6);
     if (data) setFoodBanks(data);
+  };
+
+  const applyFilters = () => {
+    let filtered = [...kitchens];
+
+    // Search term
+    if (searchTerm) {
+      const term = searchTerm.toLowerCase();
+      filtered = filtered.filter(k =>
+        k.name.toLowerCase().includes(term) ||
+        k.location.toLowerCase().includes(term) ||
+        k.food_type.toLowerCase().includes(term)
+      );
+    }
+
+    // Free only
+    if (freeOnly) {
+      filtered = filtered.filter(k => k.is_free);
+    }
+
+    // Open now (simplified check)
+    if (openNow) {
+      const currentHour = new Date().getHours();
+      filtered = filtered.filter(k => {
+        // Basic check - assumes kitchens with "24" or operating during current hour
+        if (k.timings.toLowerCase().includes('24')) return true;
+        return currentHour >= 7 && currentHour <= 21; // Basic filter
+      });
+    }
+
+    // Meal type
+    if (mealTypeFilter !== "all") {
+      filtered = filtered.filter(k =>
+        k.meal_types?.some(m => m.toLowerCase() === mealTypeFilter.toLowerCase())
+      );
+    }
+
+    setFilteredKitchens(filtered);
+  };
+
+  const handleKitchenClick = (kitchen: CommunityKitchen) => {
+    setSelectedKitchen(kitchen);
+    setKitchenDetailsOpen(true);
+  };
+
+  const handleMapMarkerClick = (type: 'kitchen' | 'bank', id: string) => {
+    if (type === 'kitchen') {
+      const kitchen = kitchens.find(k => k.id === id);
+      if (kitchen) handleKitchenClick(kitchen);
+    }
   };
 
   const getUrgencyColor = (urgency: string) => {
@@ -259,67 +340,162 @@ export const FoodResourcesSection = () => {
           </TabsContent>
 
           {/* Community Kitchens Tab */}
-          <TabsContent value="kitchens" className="space-y-8">
-            <div className="text-center mb-6">
-              <p className="text-muted-foreground">
-                Find community kitchens serving free or affordable meals in your area
-              </p>
-            </div>
+          <TabsContent value="kitchens" className="space-y-6">
+            {/* Search and Filters */}
+            <Card>
+              <CardContent className="p-6">
+                <div className="space-y-4">
+                  {/* Search Bar */}
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Search kitchens by name, location, or food type..."
+                      className="pl-10"
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                    />
+                  </div>
 
-            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {kitchens.map((kitchen) => (
-                <Card key={kitchen.id} className="hover:shadow-lg transition-shadow">
-                  <CardHeader>
-                    <div className="flex items-start justify-between mb-2">
-                      {kitchen.is_free ? (
-                        <Badge variant="default">Free Meals</Badge>
-                      ) : (
-                        <Badge variant="secondary">{kitchen.price_range}</Badge>
-                      )}
-                      <div className="flex items-center text-sm">
-                        <Sparkles className="w-4 h-4 mr-1 text-yellow-500" />
-                        {kitchen.rating.toFixed(1)} ({kitchen.total_reviews})
+                  {/* Filters Row */}
+                  <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                    <Select value={mealTypeFilter} onValueChange={setMealTypeFilter}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Meal Type" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Meals</SelectItem>
+                        <SelectItem value="breakfast">Breakfast</SelectItem>
+                        <SelectItem value="lunch">Lunch</SelectItem>
+                        <SelectItem value="dinner">Dinner</SelectItem>
+                        <SelectItem value="snacks">Snacks</SelectItem>
+                      </SelectContent>
+                    </Select>
+
+                    <Select value={distanceFilter} onValueChange={setDistanceFilter}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Distance" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Any Distance</SelectItem>
+                        <SelectItem value="2">Within 2 km</SelectItem>
+                        <SelectItem value="5">Within 5 km</SelectItem>
+                        <SelectItem value="10">Within 10 km</SelectItem>
+                      </SelectContent>
+                    </Select>
+
+                    <div className="flex items-center space-x-2 col-span-2 md:col-span-1">
+                      <Switch
+                        id="free-only"
+                        checked={freeOnly}
+                        onCheckedChange={setFreeOnly}
+                      />
+                      <Label htmlFor="free-only" className="text-sm cursor-pointer">
+                        Free Only
+                      </Label>
+                    </div>
+
+                    <div className="flex items-center space-x-2 col-span-2 md:col-span-1">
+                      <Switch
+                        id="open-now"
+                        checked={openNow}
+                        onCheckedChange={setOpenNow}
+                      />
+                      <Label htmlFor="open-now" className="text-sm cursor-pointer">
+                        Open Now
+                      </Label>
+                    </div>
+
+                    <Button
+                      variant="outline"
+                      className="col-span-2 md:col-span-1"
+                      onClick={() => setShowMap(!showMap)}
+                    >
+                      <MapIcon className="w-4 h-4 mr-2" />
+                      {showMap ? 'List View' : 'Map View'}
+                    </Button>
+                  </div>
+
+                  <div className="flex justify-between items-center pt-2">
+                    <p className="text-sm text-muted-foreground">
+                      Found {filteredKitchens.length} kitchen{filteredKitchens.length !== 1 ? 's' : ''}
+                    </p>
+                    <Button onClick={() => setAddKitchenOpen(true)} size="sm">
+                      <Plus className="w-4 h-4 mr-2" />
+                      Add Kitchen
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Map or List View */}
+            {showMap ? (
+              <KitchenMapView
+                kitchens={filteredKitchens.filter(k => k.latitude && k.longitude)}
+                foodBanks={foodBanks.filter(b => b.latitude && b.longitude)}
+                onMarkerClick={handleMapMarkerClick}
+              />
+            ) : (
+              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {filteredKitchens.map((kitchen) => (
+                  <Card 
+                    key={kitchen.id} 
+                    className="hover:shadow-lg transition-all duration-300 hover:scale-[1.02] cursor-pointer"
+                    onClick={() => handleKitchenClick(kitchen)}
+                  >
+                    <CardHeader>
+                      <div className="flex items-start justify-between mb-2">
+                        {kitchen.is_free ? (
+                          <Badge variant="default">Free Meals</Badge>
+                        ) : (
+                          <Badge variant="secondary">{kitchen.price_range}</Badge>
+                        )}
+                        <div className="flex items-center text-sm">
+                          <Sparkles className="w-4 h-4 mr-1 text-yellow-500" />
+                          {kitchen.rating.toFixed(1)} ({kitchen.total_reviews})
+                        </div>
                       </div>
-                    </div>
-                    <CardTitle className="text-xl">{kitchen.name}</CardTitle>
-                    <CardDescription>{kitchen.food_type}</CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-3">
-                    <div className="flex items-center text-sm">
-                      <Clock className="w-4 h-4 mr-2" />
-                      {kitchen.timings}
-                    </div>
-                    <div className="flex flex-wrap gap-1">
-                      {kitchen.meal_types?.map((meal) => (
-                        <Badge key={meal} variant="outline" className="text-xs">
-                          {meal}
-                        </Badge>
-                      ))}
-                    </div>
-                    <div className="flex items-center text-sm text-muted-foreground">
-                      <MapPin className="w-4 h-4 mr-2" />
-                      {kitchen.location}
-                    </div>
-                    <div className="flex items-center text-sm">
-                      <Phone className="w-4 h-4 mr-2" />
-                      {kitchen.contact_phone}
-                    </div>
-                    <div className="flex gap-2">
-                      <Button className="flex-1" size="sm">
-                        Get Directions
-                      </Button>
-                      <Button className="flex-1" size="sm" variant="outline">
-                        Volunteer
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-            {kitchens.length === 0 && (
-              <p className="text-center text-muted-foreground py-8">
-                No community kitchens listed yet.
-              </p>
+                      <CardTitle className="text-xl">{kitchen.name}</CardTitle>
+                      <CardDescription>{kitchen.food_type}</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      <div className="flex items-center text-sm">
+                        <Clock className="w-4 h-4 mr-2" />
+                        {kitchen.timings}
+                      </div>
+                      <div className="flex flex-wrap gap-1">
+                        {kitchen.meal_types?.map((meal) => (
+                          <Badge key={meal} variant="outline" className="text-xs">
+                            {meal}
+                          </Badge>
+                        ))}
+                      </div>
+                      <div className="flex items-center text-sm text-muted-foreground">
+                        <MapPin className="w-4 h-4 mr-2" />
+                        {kitchen.location}
+                      </div>
+                      <div className="flex items-center text-sm">
+                        <Phone className="w-4 h-4 mr-2" />
+                        {kitchen.contact_phone}
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+            
+            {filteredKitchens.length === 0 && (
+              <Card className="p-12 text-center">
+                <Utensils className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                <h3 className="text-lg font-semibold mb-2">No kitchens found</h3>
+                <p className="text-muted-foreground mb-4">
+                  Try adjusting your filters or add a new kitchen to help others.
+                </p>
+                <Button onClick={() => setAddKitchenOpen(true)}>
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add Kitchen
+                </Button>
+              </Card>
             )}
           </TabsContent>
 
@@ -484,6 +660,16 @@ export const FoodResourcesSection = () => {
         <FoodRequestDialog 
           open={requestDialogOpen} 
           onOpenChange={setRequestDialogOpen}
+        />
+        <KitchenDetailsDialog
+          open={kitchenDetailsOpen}
+          onOpenChange={setKitchenDetailsOpen}
+          kitchen={selectedKitchen}
+        />
+        <AddKitchenDialog
+          open={addKitchenOpen}
+          onOpenChange={setAddKitchenOpen}
+          onSuccess={fetchKitchens}
         />
       </div>
     </section>
