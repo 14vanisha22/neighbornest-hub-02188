@@ -20,7 +20,7 @@ const applicationSchema = z.object({
 interface JobApplicationDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  jobId: number;
+  jobId: string;
   jobTitle: string;
 }
 
@@ -111,7 +111,7 @@ export const JobApplicationDialog = ({ open, onOpenChange, jobId, jobTitle }: Jo
       // Submit application
       const { error } = await supabase.from('job_applications').insert({
         user_id: user.id,
-        job_id: String(jobId),
+        job_id: jobId,
         full_name: validation.data.full_name,
         email: validation.data.email,
         phone: validation.data.phone,

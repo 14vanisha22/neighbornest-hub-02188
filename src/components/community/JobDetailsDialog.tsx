@@ -22,7 +22,7 @@ import {
 } from "lucide-react";
 
 interface Job {
-  id: number;
+  id: string;
   title: string;
   company: string;
   type: string;

@@ -25,7 +25,7 @@ import {
 // Mock data for jobs and services
 const jobsData = [
   {
-    id: 1,
+    id: "550e8400-e29b-41d4-a716-446655440001",
     title: "Frontend Developer",
     company: "Local Tech Startup",
     type: "Full-time",
@@ -57,7 +57,7 @@ const jobsData = [
     expiresAt: "December 31, 2025"
   },
   {
-    id: 2,
+    id: "550e8400-e29b-41d4-a716-446655440002",
     title: "Plumbing Services",
     company: "Mike's Plumbing",
     type: "Service",
@@ -88,7 +88,7 @@ const jobsData = [
     verified: true
   },
   {
-    id: 3,
+    id: "550e8400-e29b-41d4-a716-446655440003",
     title: "Math Tutor",
     company: "Community Learning Center",
     type: "Part-time",
@@ -119,7 +119,7 @@ const jobsData = [
     verified: false
   },
   {
-    id: 4,
+    id: "550e8400-e29b-41d4-a716-446655440004",
     title: "Dog Walking",
     company: "Sarah's Pet Care",
     type: "Service",
@@ -183,7 +183,7 @@ export const JobsSection = () => {
   const [selectedJob, setSelectedJob] = useState<typeof jobsData[0] | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isApplicationDialogOpen, setIsApplicationDialogOpen] = useState(false);
-  const [savedJobs, setSavedJobs] = useState<Set<number>>(new Set());
+  const [savedJobs, setSavedJobs] = useState<Set<string>>(new Set());
 
   // Fetch saved jobs
   useEffect(() => {
@@ -197,14 +197,14 @@ export const JobsSection = () => {
         .eq('user_id', user.id);
 
       if (data) {
-        setSavedJobs(new Set(data.map(item => Number(item.job_id))));
+        setSavedJobs(new Set(data.map(item => item.job_id)));
       }
     };
 
     fetchSavedJobs();
   }, []);
 
-  const handleSaveJob = async (jobId: number) => {
+  const handleSaveJob = async (jobId: string) => {
     const { data: { user } } = await supabase.auth.getUser();
     
     if (!user) {
@@ -225,7 +225,7 @@ export const JobsSection = () => {
           .from('saved_jobs')
           .delete()
           .eq('user_id', user.id)
-          .eq('job_id', String(jobId));
+          .eq('job_id', jobId);
         
         setSavedJobs(prev => {
           const newSet = new Set(prev);
@@ -240,7 +240,7 @@ export const JobsSection = () => {
           .from('saved_jobs')
           .insert({
             user_id: user.id,
-            job_id: String(jobId)
+            job_id: jobId
           });
 
         setSavedJobs(prev => new Set(prev).add(jobId));
